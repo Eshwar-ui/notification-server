@@ -90,6 +90,9 @@ app.post('/send-notifications', async (req, res) => {
       return res.status(400).json({ error: 'Invalid tokens array' });
     }
 
+    console.log(`📤 Sending notifications to ${tokens.length} tokens`);
+    console.log(`📝 Title: ${title}, Body: ${body}`);
+
     const message = {
       notification: {
         title: title,
@@ -100,16 +103,42 @@ app.post('/send-notifications', async (req, res) => {
       android: {
         priority: 'high',
       },
+      apns: {
+        headers: {
+          'apns-priority': '10',
+        },
+      },
     };
 
     const response = await admin.messaging().sendEachForMulticast(message);
+    
+    // Log detailed results
+    console.log(`✅ Success: ${response.successCount}, ❌ Failed: ${response.failureCount}`);
+    
+    if (response.failureCount > 0) {
+      console.log('❌ Failed responses:');
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          console.log(`  Token ${idx}: ${resp.error?.code} - ${resp.error?.message}`);
+        }
+      });
+    }
+
     res.json({
       success: true,
       successCount: response.successCount,
       failureCount: response.failureCount,
+      responses: response.responses.map((resp, idx) => ({
+        index: idx,
+        success: resp.success,
+        error: resp.error ? {
+          code: resp.error.code,
+          message: resp.error.message
+        } : null
+      }))
     });
   } catch (error) {
-    console.error('Error sending notifications:', error);
+    console.error('❌ Error sending notifications:', error);
     res.status(500).json({ error: error.message });
   }
 });
